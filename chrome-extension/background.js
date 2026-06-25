@@ -123,14 +123,15 @@ async function handle(msg) {
       recording    = true;
       recTabId     = tabId;
       recStepCount = 0;
+      startKeepAlive(); // keep SW alive so `recording` flag survives user interactions
       await chrome.storage.local.set({ recSteps: [], isRecording: true });
       await chrome.scripting.executeScript({ target: { tabId }, files: ['recorder.js'] });
       return { ok: true };
     }
     case 'stopRecording': {
       recording = false;
+      stopKeepAlive();
       await chrome.storage.local.set({ isRecording: false });
-      // Tell recorder.js to clean up
       chrome.tabs.sendMessage(tabId, { type: 'stopRecorder' }).catch(() => {});
       const { recSteps = [] } = await chrome.storage.local.get('recSteps');
       await chrome.storage.local.remove('recSteps');

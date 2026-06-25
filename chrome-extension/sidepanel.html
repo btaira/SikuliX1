@@ -24,6 +24,33 @@
          font: 13px/1.5 'Segoe UI', system-ui, sans-serif;
          display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
+  /* ── image preview modal ── */
+  #img-modal {
+    display: none; position: fixed; inset: 0; z-index: 9999;
+    flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  }
+  #img-modal.open { display: flex; }
+  #img-modal-backdrop {
+    position: absolute; inset: 0; background: rgba(0,0,0,.82); cursor: pointer;
+  }
+  #img-modal-img {
+    position: relative; max-width: 92%; max-height: 65%;
+    border: 2px solid var(--accent); border-radius: var(--radius);
+    box-shadow: 0 0 48px rgba(124,106,247,.45);
+    image-rendering: pixelated; /* keep crisp for small screenshots */
+    background: #0d0d1a;
+  }
+  #img-modal-name {
+    position: relative; color: var(--text); font: 700 12px 'Cascadia Code', monospace;
+  }
+  #img-modal-dims {
+    position: relative; color: var(--muted); font-size: 11px; margin-top: -4px;
+  }
+  #img-modal kbd {
+    font-size: 10px; background: var(--surface2); padding: 1px 5px;
+    border-radius: 3px; color: var(--muted);
+  }
+
   /* ── scrollbar ── */
   ::-webkit-scrollbar       { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
@@ -331,6 +358,14 @@ log('Found at ' + r.x + ', ' + r.y);
     <button class="btn-ghost" id="btn-clear-console" style="font-size:10px;padding:2px 6px;">Clear</button>
   </div>
   <div id="console-out"></div>
+</div>
+
+<!-- ── Image preview modal ── -->
+<div id="img-modal">
+  <div id="img-modal-backdrop"></div>
+  <img id="img-modal-img" alt="preview">
+  <div id="img-modal-name"></div>
+  <div id="img-modal-dims"></div>
 </div>
 
 <script src="lib/api.js"></script>

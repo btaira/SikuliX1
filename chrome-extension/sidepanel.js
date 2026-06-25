@@ -248,8 +248,9 @@ function buildThumb(step) {
   if (tpl) {
     const img = document.createElement('img');
     img.className = 'step-thumb';
-    img.src = tpl.dataUrl;
-    img.title = step.image;
+    img.src   = tpl.dataUrl;
+    img.title = `${step.image} — click to preview`;
+    img.addEventListener('click', () => showPreview(step.image));
     return img;
   }
   const ph = el('div', 'step-thumb-empty', '📷');
@@ -257,18 +258,22 @@ function buildThumb(step) {
   return ph;
 }
 
-function updateThumb(el, name) {
+function updateThumb(thumbEl, name) {
   const tpl = templates[name];
-  if (tpl && el.tagName !== 'IMG') {
+  if (tpl && thumbEl.tagName !== 'IMG') {
     const img = document.createElement('img');
-    img.className = 'step-thumb'; img.src = tpl.dataUrl; img.title = name;
-    el.replaceWith(img);
-  } else if (!tpl && el.tagName === 'IMG') {
+    img.className = 'step-thumb';
+    img.src   = tpl.dataUrl;
+    img.title = `${name} — click to preview`;
+    img.addEventListener('click', () => showPreview(name));
+    thumbEl.replaceWith(img);
+  } else if (!tpl && thumbEl.tagName === 'IMG') {
     const ph = document.createElement('div');
     ph.className = 'step-thumb-empty'; ph.textContent = '📷';
-    el.replaceWith(ph);
-  } else if (tpl && el.tagName === 'IMG') {
-    el.src = tpl.dataUrl; el.title = name;
+    thumbEl.replaceWith(ph);
+  } else if (tpl && thumbEl.tagName === 'IMG') {
+    thumbEl.src   = tpl.dataUrl;
+    thumbEl.title = `${name} — click to preview`;
   }
 }
 
@@ -530,7 +535,7 @@ function renderTemplates() {
     const item = document.createElement('div');
     item.className = 'tpl-item';
     item.innerHTML = `
-      <img class="tpl-thumb" src="${tpl.dataUrl}" alt="${name}">
+      <img class="tpl-thumb" src="${tpl.dataUrl}" alt="${name}" title="${name} — click to preview" style="cursor:pointer">
       <div class="tpl-info">
         <div class="tpl-name">${name}</div>
         <div class="tpl-dims">${tpl.width}×${tpl.height}px</div>
@@ -538,6 +543,7 @@ function renderTemplates() {
       <button class="tpl-insert" data-name="${name}">+ Step</button>
       <button class="tpl-delete" data-name="${name}">✕</button>
     `;
+    item.querySelector('img').addEventListener('click', () => showPreview(name));
     item.querySelector('.tpl-insert').addEventListener('click', () => {
       steps.push({ ...makeStep('click'), image: name });
       renderWorkflow();
@@ -600,6 +606,31 @@ async function loadWorkflow() {
   steps = saved || [];
   renderWorkflow();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// IMAGE PREVIEW MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+const $imgModal      = document.getElementById('img-modal');
+const $imgModalImg   = document.getElementById('img-modal-img');
+const $imgModalName  = document.getElementById('img-modal-name');
+const $imgModalDims  = document.getElementById('img-modal-dims');
+
+function showPreview(name) {
+  const tpl = templates[name];
+  if (!tpl) return;
+  $imgModalImg.src      = tpl.dataUrl;
+  $imgModalName.textContent = name;
+  $imgModalDims.textContent = `${tpl.width} × ${tpl.height} px — click anywhere to close`;
+  $imgModal.classList.add('open');
+}
+
+document.getElementById('img-modal-backdrop').addEventListener('click', () => {
+  $imgModal.classList.remove('open');
+});
+$imgModalImg.addEventListener('click', () => $imgModal.classList.remove('open'));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') $imgModal.classList.remove('open');
+});
 
 // ── utils ──────────────────────────────────────────────────────────────────────
 function uid() { return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
