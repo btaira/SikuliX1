@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SikuliX for Chrome",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Visual browser automation using image recognition — a SikuliX-like tool for Chrome.",
   "permissions": [
     "tabs",
@@ -35,7 +35,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["capture.html", "capture.js", "matcher.worker.js"],
+      "resources": ["capture.html", "capture.js", "matcher.worker.js", "recorder.js"],
       "matches": ["<all_urls>"]
     }
   ]

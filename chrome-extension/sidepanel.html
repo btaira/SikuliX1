@@ -7,137 +7,330 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #1e1e2e; --surface: #2a2a3e; --border: #3a3a5c;
-    --accent: #7c6af7; --accent2: #4ec9b0; --danger: #f38ba8;
-    --text: #cdd6f4; --muted: #6c7086; --success: #a6e3a1;
-    --warn: #f9e2af;
+    --bg:      #1e1e2e;
+    --surface: #2a2a3e;
+    --surface2:#323248;
+    --border:  #3a3a5c;
+    --accent:  #7c6af7;
+    --teal:    #4ec9b0;
+    --red:     #f38ba8;
+    --green:   #a6e3a1;
+    --yellow:  #f9e2af;
+    --text:    #cdd6f4;
+    --muted:   #6c7086;
+    --radius:  6px;
   }
-
-  body { background: var(--bg); color: var(--text); font: 13px/1.5 'Segoe UI', system-ui, sans-serif;
+  body { background: var(--bg); color: var(--text);
+         font: 13px/1.5 'Segoe UI', system-ui, sans-serif;
          display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
+  /* ── scrollbar ── */
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
   /* ── toolbar ── */
-  #toolbar { display: flex; align-items: center; gap: 6px; padding: 8px; background: var(--surface);
-             border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  #toolbar h1 { font-size: 13px; font-weight: 700; color: var(--accent); flex: 1; }
-  button { cursor: pointer; border: none; border-radius: 4px; font: inherit; padding: 4px 10px;
-           transition: opacity .15s; }
-  button:hover { opacity: .85; }
-  button:active { opacity: .7; }
-  #btn-run    { background: var(--accent);  color: #fff; }
-  #btn-stop   { background: var(--danger);  color: #fff; display: none; }
-  #btn-save   { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-  #btn-clear  { background: var(--surface); color: var(--muted); border: 1px solid var(--border); font-size: 11px; }
+  #toolbar {
+    display: flex; align-items: center; gap: 6px; padding: 7px 8px;
+    background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+  }
+  #toolbar-title { font-size: 13px; font-weight: 700; color: var(--accent); }
+  .spacer { flex: 1; }
+  btn, button {
+    cursor: pointer; border: none; border-radius: var(--radius);
+    font: 12px/1 inherit; padding: 5px 10px; transition: opacity .12s;
+  }
+  button:hover  { opacity: .85; }
+  button:active { opacity: .65; }
+  #btn-run    { background: var(--accent); color: #fff; }
+  #btn-stop   { background: var(--red);    color: #fff; display: none; }
+  #btn-record { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+  #btn-record.active { background: var(--red); color: #fff; border-color: var(--red); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{ opacity:1; } 50%{ opacity:.65; } }
+  .btn-ghost { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
 
   /* ── tabs ── */
   #tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .tab { padding: 6px 14px; cursor: pointer; font-size: 12px; color: var(--muted); border-bottom: 2px solid transparent;
-         user-select: none; }
+  .tab { padding: 7px 14px; cursor: pointer; font-size: 12px; color: var(--muted);
+         border-bottom: 2px solid transparent; user-select: none; }
   .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  /* ── panels ── */
-  #editor-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
-  #templates-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 8px; gap: 8px; }
-  #panel-active-editor   { display: flex; }
-  #panel-active-templates { display: none; }
+  /* ════════════════════════════════════════
+     WORKFLOW PANEL
+  ════════════════════════════════════════ */
+  #workflow-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
 
-  /* ── editor ── */
-  #editor { flex: 1; background: var(--bg); color: var(--text); font: 13px/1.6 'Cascadia Code','Fira Mono',monospace;
-            border: none; outline: none; resize: none; padding: 10px; tab-size: 2; }
+  #workflow-toolbar {
+    display: flex; align-items: center; gap: 6px; padding: 7px 8px; flex-shrink: 0;
+    background: var(--surface2); border-bottom: 1px solid var(--border);
+  }
+  .add-btn-group { display: flex; gap: 4px; flex-wrap: wrap; }
+  .add-step-btn {
+    font-size: 11px; padding: 3px 8px;
+    background: var(--surface); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .add-step-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  #step-list {
+    flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 5px;
+  }
+  #step-empty {
+    margin: auto; text-align: center; color: var(--muted); font-size: 12px; line-height: 2;
+  }
+
+  /* ── step cards ── */
+  .step-card {
+    display: flex; align-items: center; gap: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    overflow: hidden; transition: border-color .15s;
+    position: relative;
+  }
+  .step-card:hover   { border-color: var(--accent); }
+  .step-card.running { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .step-card.drag-over { border-color: var(--teal); }
+
+  .step-handle {
+    padding: 0 7px; color: var(--muted); cursor: grab; font-size: 14px;
+    align-self: stretch; display: flex; align-items: center; background: var(--surface2);
+    border-right: 1px solid var(--border); user-select: none;
+  }
+  .step-handle:active { cursor: grabbing; }
+
+  .step-num {
+    padding: 0 7px; font-size: 10px; color: var(--muted); min-width: 26px; text-align: center;
+    align-self: stretch; display: flex; align-items: center; background: var(--surface2);
+    border-right: 1px solid var(--border);
+  }
+
+  .step-icon {
+    padding: 0 8px; font-size: 16px; align-self: stretch;
+    display: flex; align-items: center; min-width: 36px;
+  }
+
+  .step-body { flex: 1; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+  .step-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+
+  .step-row { display: flex; align-items: center; gap: 6px; }
+
+  /* inline template preview (the SikuliX-style image in code) */
+  .step-thumb {
+    width: 56px; height: 32px; object-fit: contain; border-radius: 3px;
+    background: #0d0d1a; border: 1px solid var(--border); flex-shrink: 0; cursor: pointer;
+  }
+  .step-thumb:hover { border-color: var(--accent); }
+  .step-thumb-empty {
+    width: 56px; height: 32px; border-radius: 3px; background: #0d0d1a;
+    border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0; cursor: pointer; color: var(--muted);
+  }
+  .step-thumb-empty:hover { border-color: var(--accent); color: var(--accent); }
+
+  .step-input {
+    flex: 1; min-width: 0; background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px;
+    font: 12px/1 'Cascadia Code', 'Fira Mono', monospace; outline: none;
+  }
+  .step-input:focus { border-color: var(--accent); }
+  .step-input-sm { width: 72px; flex: none; }
+  .step-select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 6px; font: 12px inherit; outline: none;
+  }
+  .step-select:focus { border-color: var(--accent); }
+  .step-badge {
+    font-size: 10px; padding: 1px 6px; border-radius: 10px;
+    background: var(--surface2); color: var(--muted); white-space: nowrap;
+  }
+
+  .step-delete {
+    padding: 0 10px; align-self: stretch; background: transparent; color: var(--muted);
+    font-size: 14px; border-left: 1px solid var(--border); border-radius: 0;
+  }
+  .step-delete:hover { color: var(--red); background: rgba(243,139,168,.08); }
+
+  /* export bar */
+  #export-bar {
+    display: flex; gap: 6px; padding: 7px 8px; background: var(--surface2);
+    border-top: 1px solid var(--border); flex-shrink: 0; align-items: center;
+  }
+  #export-bar span { font-size: 11px; color: var(--muted); flex: 1; }
+
+  /* ════════════════════════════════════════
+     CODE PANEL
+  ════════════════════════════════════════ */
+  #code-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+  #editor {
+    flex: 1; background: var(--bg); color: var(--text); border: none; outline: none;
+    resize: none; padding: 10px; tab-size: 2;
+    font: 13px/1.65 'Cascadia Code', 'Fira Mono', monospace;
+  }
   #editor::placeholder { color: var(--muted); }
-
-  /* ── threshold bar ── */
-  #threshold-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--surface);
-                   border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); flex-shrink: 0; }
-  #threshold-bar label { white-space: nowrap; }
+  #code-toolbar {
+    display: flex; gap: 6px; padding: 7px 8px; background: var(--surface2);
+    border-top: 1px solid var(--border); flex-shrink: 0; align-items: center;
+  }
+  #threshold-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
   #threshold { width: 80px; accent-color: var(--accent); }
-  #threshold-val { width: 28px; }
 
-  /* ── console ── */
-  #console-wrap { height: 130px; background: #0d0d1a; border-top: 1px solid var(--border); display: flex;
-                  flex-direction: column; flex-shrink: 0; }
-  #console-label { padding: 3px 8px; font-size: 10px; color: var(--muted); background: var(--surface);
-                   border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
-  #console { flex: 1; overflow-y: auto; padding: 6px 8px; font: 11px/1.6 'Cascadia Code','Fira Mono',monospace; }
-  .log-info  { color: var(--text); }
-  .log-ok    { color: var(--success); }
-  .log-warn  { color: var(--warn); }
-  .log-error { color: var(--danger); }
+  /* ════════════════════════════════════════
+     TEMPLATES PANEL
+  ════════════════════════════════════════ */
+  #templates-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; padding: 8px; gap: 8px; }
+  #tpl-toolbar { display: flex; gap: 6px; }
+  #tpl-name-inp {
+    flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 5px 8px; font: inherit; outline: none;
+  }
+  #tpl-name-inp:focus { border-color: var(--accent); }
+  #btn-capture { background: var(--teal); color: #000; }
+  #tpl-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
+  .tpl-item {
+    display: flex; align-items: center; gap: 8px; padding: 6px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .tpl-thumb { width: 72px; height: 40px; object-fit: contain; background: #0d0d1a; border-radius: 3px; }
+  .tpl-info  { flex: 1; min-width: 0; }
+  .tpl-name  { font-size: 12px; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tpl-dims  { font-size: 10px; color: var(--muted); }
+  .tpl-insert { font-size: 10px; padding: 2px 7px; background: var(--accent); color: #fff; }
+  .tpl-delete { font-size: 10px; padding: 2px 7px; background: var(--red);    color: #fff; }
 
-  /* ── templates panel ── */
-  #tpl-toolbar { display: flex; gap: 6px; flex-shrink: 0; }
-  #tpl-name { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
-              border-radius: 4px; padding: 4px 8px; font: inherit; outline: none; }
-  #tpl-name::placeholder { color: var(--muted); }
-  #btn-capture { background: var(--accent2); color: #000; }
-  #tpl-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; }
-  .tpl-item { display: flex; align-items: center; gap: 8px; padding: 6px; background: var(--surface);
-              border: 1px solid var(--border); border-radius: 6px; }
-  .tpl-thumb { width: 60px; height: 40px; object-fit: contain; background: #111; border-radius: 3px; }
-  .tpl-name  { flex: 1; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tpl-insert { font-size: 10px; padding: 2px 6px; background: var(--accent); color: #fff; }
-  .tpl-delete { font-size: 10px; padding: 2px 6px; background: var(--danger); color: #fff; }
-
-  /* ── scrollbar ── */
-  ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  /* ════════════════════════════════════════
+     CONSOLE
+  ════════════════════════════════════════ */
+  #console-wrap {
+    height: 120px; background: #0a0a14; border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  #console-header {
+    padding: 3px 8px; font-size: 10px; color: var(--muted); background: var(--surface2);
+    border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;
+  }
+  #console-out {
+    flex: 1; overflow-y: auto; padding: 5px 8px;
+    font: 11px/1.6 'Cascadia Code', 'Fira Mono', monospace;
+  }
+  .c-info  { color: var(--text); }
+  .c-ok    { color: var(--green); }
+  .c-warn  { color: var(--yellow); }
+  .c-error { color: var(--red); }
+  .c-step  { color: var(--teal); }
 </style>
 </head>
 <body>
 
+<!-- ── Toolbar ── -->
 <div id="toolbar">
-  <h1>⬡ SikuliX</h1>
-  <button id="btn-save">Save</button>
+  <span id="toolbar-title">⬡ SikuliX</span>
+  <div class="spacer"></div>
+  <button id="btn-record">⏺ Record</button>
   <button id="btn-run">▶ Run</button>
   <button id="btn-stop">■ Stop</button>
 </div>
 
+<!-- ── Tabs ── -->
 <div id="tabs">
-  <div class="tab active" data-panel="editor">Script</div>
+  <div class="tab active" data-panel="workflow">Workflow</div>
+  <div class="tab"        data-panel="code">Code</div>
   <div class="tab"        data-panel="templates">Templates</div>
 </div>
 
-<!-- Script editor panel -->
-<div id="editor-panel">
-  <textarea id="editor" spellcheck="false" placeholder="// SikuliX automation script
-// Available: find, exists, wait, waitVanish, findAll
-//            click, rightClick, doubleClick, hover, dragDrop
-//            type, key, scroll, pause, log, screenshot
+<!-- ══════════════════════════════════════
+     WORKFLOW PANEL
+══════════════════════════════════════ -->
+<div id="workflow-panel">
+  <div id="workflow-toolbar">
+    <div class="add-btn-group">
+      <button class="add-step-btn" data-type="click">🖱 Click</button>
+      <button class="add-step-btn" data-type="rightClick">🖱 R-Click</button>
+      <button class="add-step-btn" data-type="doubleClick">🖱 DblClick</button>
+      <button class="add-step-btn" data-type="wait">⏳ Wait</button>
+      <button class="add-step-btn" data-type="waitVanish">👻 Vanish</button>
+      <button class="add-step-btn" data-type="find">🔍 Find</button>
+      <button class="add-step-btn" data-type="type">⌨ Type</button>
+      <button class="add-step-btn" data-type="key">⌨ Key</button>
+      <button class="add-step-btn" data-type="scroll">↕ Scroll</button>
+      <button class="add-step-btn" data-type="pause">⏸ Pause</button>
+    </div>
+  </div>
 
-// Example:
-await click('search-box');
-await type('Hello World');
-await key('enter');
-const result = await wait('result-item', 5000);
-log('Found at: ' + result.x + ', ' + result.y);
-"></textarea>
+  <div id="step-list">
+    <div id="step-empty">
+      No steps yet.<br>
+      Click a button above to add a step,<br>
+      or press <b>⏺ Record</b> to capture actions automatically.
+    </div>
+  </div>
 
-  <div id="threshold-bar">
-    <label>Match threshold:</label>
-    <input type="range" id="threshold" min="0.5" max="1.0" step="0.01" value="0.8">
-    <span id="threshold-val">0.80</span>
-    <span style="margin-left:auto; font-size:10px; color:var(--muted)">
-      Templates: <span id="tpl-count">0</span>
-    </span>
+  <div id="export-bar">
+    <span id="step-count">0 steps</span>
+    <button class="btn-ghost" id="btn-export-code" style="font-size:11px;padding:4px 10px;">Export → Code</button>
+    <button class="btn-ghost" id="btn-clear-workflow" style="font-size:11px;padding:4px 10px;">Clear</button>
   </div>
 </div>
 
-<!-- Templates panel -->
+<!-- ══════════════════════════════════════
+     CODE PANEL
+══════════════════════════════════════ -->
+<div id="code-panel">
+  <textarea id="editor" spellcheck="false" placeholder="// Write a SikuliX automation script here
+// Ctrl+Enter = Run    Ctrl+S = Save
+
+// Available API:
+//   find(name)            — locate template, returns {x,y,score,w,h}
+//   exists(name)          — like find() but returns null if not found
+//   findAll(name)         — returns [{x,y,...}]
+//   wait(name, ms)        — poll until template appears
+//   waitVanish(name, ms)  — poll until template disappears
+//   click(name|{x,y})     — find-then-click (or click coordinates)
+//   rightClick / doubleClick / hover / dragDrop
+//   type('text')          — type into focused element
+//   key('ctrl+a')         — press key combo
+//   scroll('down', 300)   — scroll
+//   pause(ms)             — sleep
+//   log('msg')            — print to console
+//   screenshot()          — capture current viewport
+
+// Example:
+await click('search-box');
+await type('SikuliX');
+await key('enter');
+const r = await wait('first-result', 5000);
+log('Found at ' + r.x + ', ' + r.y);
+"></textarea>
+
+  <div id="code-toolbar">
+    <div id="threshold-row">
+      Match threshold:
+      <input type="range" id="threshold" min="0.5" max="1.0" step="0.01" value="0.8">
+      <span id="threshold-val">0.80</span>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn-ghost" id="btn-save" style="font-size:11px;padding:4px 10px;">Save</button>
+    <span id="tpl-count-code" style="font-size:11px;color:var(--muted)">0 templates</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TEMPLATES PANEL
+══════════════════════════════════════ -->
 <div id="templates-panel">
   <div id="tpl-toolbar">
-    <input id="tpl-name" type="text" placeholder="template name…">
+    <input id="tpl-name-inp" type="text" placeholder="template name…">
     <button id="btn-capture">📷 Capture</button>
   </div>
   <div id="tpl-list"></div>
 </div>
 
-<!-- Console -->
+<!-- ── Console ── -->
 <div id="console-wrap">
-  <div id="console-label">
+  <div id="console-header">
     <span>Console</span>
-    <button id="btn-clear" style="font-size:10px;padding:1px 6px;">Clear</button>
+    <button class="btn-ghost" id="btn-clear-console" style="font-size:10px;padding:2px 6px;">Clear</button>
   </div>
-  <div id="console"></div>
+  <div id="console-out"></div>
 </div>
 
 <script src="lib/api.js"></script>
