@@ -19,8 +19,15 @@ self.onmessage = function (e) {
 
 function findBest(ss, tpl, threshold) {
   const { x, y, score } = coarseRefine(ss, tpl);
-  if (score < threshold) return null;
-  return { x: Math.round(x), y: Math.round(y), score, w: tpl.width, h: tpl.height };
+  if (!Number.isFinite(score)) return null;
+  return {
+    x: Math.round(x),
+    y: Math.round(y),
+    score,
+    w: tpl.width,
+    h: tpl.height,
+    matched: score >= threshold,
+  };
 }
 
 function findAllMatches(ss, tpl, threshold) {

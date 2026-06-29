@@ -25,8 +25,27 @@ function stopKeepAlive()  { clearInterval(keepAlive); keepAlive = null; }
 
 // ── recording state ────────────────────────────────────────────────────────────
 let recording    = false;
+let recAccepting = false;
 let recTabId     = null;
 let recStepCount = 0;
+let recStepsMem  = [];
+let recEventChain = Promise.resolve();
+let recPendingCount = 0;
+let recLastEventAt = 0;
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (!recording || tabId !== recTabId || changeInfo.status !== 'complete') return;
+  injectRecorder(tabId).catch(err => console.error('recorder reinject failed:', err));
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId !== recTabId) return;
+  recording = false;
+  recAccepting = false;
+  recTabId = null;
+  recStepsMem = [];
+  stopKeepAlive();
+});
 
 // ── message bus ────────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, respond) => {
@@ -35,10 +54,19 @@ chrome.runtime.onMessage.addListener((msg, sender, respond) => {
 
   // Recording events from recorder.js (content script)
   if (msg.type === 'recEvent') {
-    if (!recording) return;
-    handleRecEvent(msg.event, sender.tab?.id ?? recTabId)
-      .then(step => step && pushRecStep(step))
-      .catch(console.error);
+    if (!recAccepting) { respond({ queued: false }); return; }
+    recPendingCount += 1;
+    recLastEventAt = Date.now();
+    recEventChain = recEventChain
+      .then(async () => {
+        const step = await handleRecEvent(msg.event, sender);
+        if (step) await pushRecStep(step);
+      })
+      .catch(err => console.error('recEvent failed:', err))
+      .finally(() => {
+        recPendingCount = Math.max(0, recPendingCount - 1);
+      });
+    respond({ queued: true });
     return; // no response needed
   }
 
@@ -55,8 +83,7 @@ async function handle(msg) {
 
     // ── screenshot ────────────────────────────────────────────────────────────
     case 'screenshot': {
-      const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
-      return { dataUrl };
+      return captureScreenshot(tab);
     }
 
     // ── mouse ─────────────────────────────────────────────────────────────────
@@ -121,26 +148,34 @@ async function handle(msg) {
     // ── recording ─────────────────────────────────────────────────────────────
     case 'startRecording': {
       recording    = true;
+      recAccepting = true;
       recTabId     = tabId;
       recStepCount = 0;
+      recStepsMem  = [];
+      recEventChain = Promise.resolve();
+      recPendingCount = 0;
+      recLastEventAt = 0;
       startKeepAlive(); // keep SW alive so `recording` flag survives user interactions
       await chrome.storage.local.set({ recSteps: [], isRecording: true });
-      await chrome.scripting.executeScript({ target: { tabId }, files: ['recorder.js'] });
+      await injectRecorder(tabId);
       return { ok: true };
     }
     case 'stopRecording': {
-      recording = false;
-      stopKeepAlive();
       await chrome.storage.local.set({ isRecording: false });
-      chrome.tabs.sendMessage(tabId, { type: 'stopRecorder' }).catch(() => {});
-      const { recSteps = [] } = await chrome.storage.local.get('recSteps');
+      chrome.tabs.sendMessage(recTabId ?? tabId, { type: 'stopRecorder' }).catch(() => {});
+      await waitForRecorderDrain();
+      recAccepting = false;
+      await recEventChain.catch(() => {});
+      recording = false;
+      recTabId = null;
+      stopKeepAlive();
       await chrome.storage.local.remove('recSteps');
-      return { steps: recSteps };
+      return { steps: [...recStepsMem] };
     }
 
     // ── capture tab ───────────────────────────────────────────────────────────
     case 'openCapture': {
-      const ss  = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+      const { dataUrl: ss } = await captureScreenshot(tab);
       const url = chrome.runtime.getURL('capture.html')
         + '?name=' + encodeURIComponent(msg.name)
         + '&src='  + encodeURIComponent(ss);
@@ -190,18 +225,26 @@ async function handle(msg) {
 
 // ── recording helpers ──────────────────────────────────────────────────────────
 
-async function handleRecEvent(event, tabId) {
+async function handleRecEvent(event, sender) {
+  const tab = sender.tab || (recTabId ? await chrome.tabs.get(recTabId) : null);
+  if (!tab) return null;
+
   switch (event.kind) {
     case 'click': {
-      // Take screenshot and auto-crop a template around the click point
-      const tab      = await activeTab();
-      const dataUrl  = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
+      // Take a screenshot and crop around the clicked element bounds when possible.
+      const { dataUrl, metrics } = await captureScreenshot(tab);
       const name     = `rec_${++recStepCount}`;
-      const cropped  = await cropRegion(dataUrl, event.x, event.y, 140, 70);
+      const cropped  = await cropRecordedRegion(dataUrl, event, metrics);
       const { templates = {} } = await chrome.storage.local.get('templates');
       templates[name] = cropped;
       await chrome.storage.local.set({ templates });
-      return { id: uid(), type: event.button === 'right' ? 'rightClick' : 'click', image: name };
+      return {
+        id: uid(),
+        type: event.button === 'right' ? 'rightClick' : 'click',
+        image: name,
+        recordedX: event.x,
+        recordedY: event.y,
+      };
     }
     case 'type':   return { id: uid(), type: 'type',   text:      event.text  };
     case 'key':    return { id: uid(), type: 'key',    combo:     event.combo };
@@ -211,9 +254,8 @@ async function handleRecEvent(event, tabId) {
 }
 
 async function pushRecStep(step) {
-  const { recSteps = [] } = await chrome.storage.local.get('recSteps');
-  recSteps.push(step);
-  await chrome.storage.local.set({ recSteps });
+  recStepsMem.push(step);
+  await chrome.storage.local.set({ recSteps: [...recStepsMem] });
 }
 
 // Crop a w×h region centred on (cx,cy) from a PNG data URL, returns {dataUrl,width,height}
@@ -236,6 +278,61 @@ async function cropRegion(dataUrl, cx, cy, w, h) {
   return { dataUrl: 'data:image/png;base64,' + b64, width: cw, height: ch };
 }
 
+async function cropRecordedRegion(dataUrl, event, metrics) {
+  const resp   = await fetch(dataUrl);
+  const blob   = await resp.blob();
+  const bitmap = await createImageBitmap(blob);
+
+  const scaleX = metrics?.viewportWidth  ? bitmap.width  / metrics.viewportWidth  : 1;
+  const scaleY = metrics?.viewportHeight ? bitmap.height / metrics.viewportHeight : 1;
+
+  let x;
+  let y;
+  let w;
+  let h;
+
+  if (
+    event.targetRect &&
+    event.targetRect.width > 0 &&
+    event.targetRect.height > 0 &&
+    event.targetRect.width <= 180 &&
+    event.targetRect.height <= 120
+  ) {
+    const padX = Math.max(6, Math.round(event.targetRect.width * 0.12));
+    const padY = Math.max(6, Math.round(event.targetRect.height * 0.18));
+    x = Math.round((event.targetRect.left - padX) * scaleX);
+    y = Math.round((event.targetRect.top  - padY) * scaleY);
+    w = Math.round((event.targetRect.width  + padX * 2) * scaleX);
+    h = Math.round((event.targetRect.height + padY * 2) * scaleY);
+  } else {
+    const clickW = event.targetRect
+      ? clamp(Math.round(event.targetRect.width * 0.55), 56, 160)
+      : 90;
+    const clickH = event.targetRect
+      ? clamp(Math.round(event.targetRect.height * 0.55), 32, 96)
+      : 48;
+    x = Math.round((event.x - clickW / 2) * scaleX);
+    y = Math.round((event.y - clickH / 2) * scaleY);
+    w = Math.round(clickW * scaleX);
+    h = Math.round(clickH * scaleY);
+  }
+
+  x = clamp(x, 0, bitmap.width  - 1);
+  y = clamp(y, 0, bitmap.height - 1);
+  const maxW = Math.max(1, bitmap.width - x);
+  const maxH = Math.max(1, bitmap.height - y);
+  w = maxW < 24 ? maxW : clamp(w, 24, maxW);
+  h = maxH < 18 ? maxH : clamp(h, 18, maxH);
+
+  const canvas = new OffscreenCanvas(w, h);
+  canvas.getContext('2d').drawImage(bitmap, x, y, w, h, 0, 0, w, h);
+
+  const outBlob = await canvas.convertToBlob({ type: 'image/png' });
+  const ab      = await outBlob.arrayBuffer();
+  const b64     = arrayBufferToBase64(ab);
+  return { dataUrl: 'data:image/png;base64,' + b64, width: w, height: h };
+}
+
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
   let bin = '';
@@ -245,11 +342,69 @@ function arrayBufferToBase64(buffer) {
 }
 
 // ── shared utils ───────────────────────────────────────────────────────────────
+async function waitForRecorderDrain(timeoutMs = 1500, quietMs = 120) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const idleFor = recLastEventAt ? Date.now() - recLastEventAt : quietMs;
+    if (recPendingCount === 0 && idleFor >= quietMs) return;
+    await sleep(25);
+  }
+}
+
 async function activeTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) throw new Error('No active tab found');
   return tab;
 }
+
+async function injectRecorder(tabId) {
+  return chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    files: ['recorder.js'],
+  });
+}
+
+async function captureScreenshot(tab) {
+  const dataUrl = await captureVisibleTabWithRetry(tab.windowId, { format: 'png' });
+  const metrics = await capturePageMetrics(tab.id);
+  return { dataUrl, metrics };
+}
+
+async function captureVisibleTabWithRetry(windowId, options, maxAttempts = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await chrome.tabs.captureVisibleTab(windowId, options);
+    } catch (err) {
+      lastError = err;
+      if (!isCaptureQuotaError(err) || attempt === maxAttempts - 1) throw err;
+      await sleep(550);
+    }
+  }
+  throw lastError;
+}
+
+function isCaptureQuotaError(err) {
+  const msg = String(err?.message || err || '');
+  return /MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND|quota|too many/i.test(msg);
+}
+
+async function capturePageMetrics(tabId) {
+  try {
+    const [{ result } = {}] = await chrome.scripting.executeScript({
+      target: { tabId, frameIds: [0] },
+      func: () => ({
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+      }),
+    });
+    return result || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function cdp(tabId, method, params = {}) {
   return chrome.debugger.sendCommand({ tabId }, method, params);
 }
@@ -258,6 +413,7 @@ function mouseEv(tabId, type, x, y, button, clickCount) {
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function uid()     { return `s_${Date.now()}_${Math.random().toString(36).slice(2,7)}`; }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
 function parseCombo(combo) {
   const MODS = { ctrl: 2, shift: 8, alt: 1, meta: 4 };

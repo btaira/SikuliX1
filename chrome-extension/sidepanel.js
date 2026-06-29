@@ -79,7 +79,7 @@ const STEP_META = {
   rightClick:  { icon: '🖱️', label: 'Right Click',    hasImage: true  },
   doubleClick: { icon: '🖱️', label: 'Double Click',   hasImage: true  },
   find:        { icon: '🔍', label: 'Find',            hasImage: true  },
-  wait:        { icon: '⏳', label: 'Wait for',        hasImage: true  },
+  wait:        { icon: '⏳', label: 'Wait / Delay',    hasImage: true  },
   waitVanish:  { icon: '👻', label: 'Wait Vanish',     hasImage: true  },
   type:        { icon: '⌨️', label: 'Type',            hasImage: false },
   key:         { icon: '⌨️', label: 'Key',             hasImage: false },
@@ -141,7 +141,10 @@ function buildCard(step, idx) {
   if (meta.hasImage) {
     const row   = el('div', 'step-row');
     const thumb = buildThumb(step);
-    const inp   = buildInput(step, 'image', 'template name…', 'step-input');
+    const imagePlaceholder = step.type === 'wait'
+      ? 'template name (optional for delay)…'
+      : 'template name…';
+    const inp   = buildInput(step, 'image', imagePlaceholder, 'step-input');
 
     // live-update the thumbnail when name changes
     inp.addEventListener('input', () => {
@@ -323,10 +326,13 @@ $btnExport.addEventListener('click', () => {
 // ── code generation ────────────────────────────────────────────────────────────
 function generateCode(stepList) {
   const lines = stepList.map(s => {
+    const clickArg = s.image && Number.isFinite(s.recordedX) && Number.isFinite(s.recordedY)
+      ? `{ template: '${s.image}', x: ${s.recordedX}, y: ${s.recordedY}, preferRecorded: true }`
+      : `'${s.image}'`;
     switch (s.type) {
-      case 'click':       return `await click('${s.image}');`;
-      case 'rightClick':  return `await rightClick('${s.image}');`;
-      case 'doubleClick': return `await doubleClick('${s.image}');`;
+      case 'click':       return `await click(${clickArg});`;
+      case 'rightClick':  return `await rightClick(${clickArg});`;
+      case 'doubleClick': return `await doubleClick(${clickArg});`;
       case 'find':        return s.varName
         ? `const ${s.varName} = await find('${s.image}');`
         : `await find('${s.image}');`;
@@ -443,10 +449,14 @@ async function runWorkflow() {
 }
 
 async function execStep(step, api) {
+  const recordedTarget = step.image && Number.isFinite(step.recordedX) && Number.isFinite(step.recordedY)
+    ? { template: step.image, x: step.recordedX, y: step.recordedY, preferRecorded: true }
+    : step.image;
+
   switch (step.type) {
-    case 'click':       return api.click(step.image);
-    case 'rightClick':  return api.rightClick(step.image);
-    case 'doubleClick': return api.doubleClick(step.image);
+    case 'click':       return api.click(recordedTarget);
+    case 'rightClick':  return api.rightClick(recordedTarget);
+    case 'doubleClick': return api.doubleClick(recordedTarget);
     case 'find':        return api.find(step.image);
     case 'wait':        return api.wait(step.image, step.timeout);
     case 'waitVanish':  return api.waitVanish(step.image, step.timeout);
@@ -516,6 +526,7 @@ function buildAPI() {
     msg => clog(msg),
     id  => templates[id],
     ()  => threshold,
+    ()  => abortCtl?.signal ?? null,
   );
 }
 
@@ -524,9 +535,15 @@ function buildAPI() {
 // ══════════════════════════════════════════════════════════════════════════════
 async function loadTemplates() {
   const { templates: t } = await send({ type: 'getTemplates' });
-  templates = t || {};
+  syncTemplates(t || {});
+}
+
+function syncTemplates(nextTemplates, options = {}) {
+  templates = nextTemplates || {};
   renderTemplates();
+  renderWorkflow();
   $tplCountCode.textContent = `${Object.keys(templates).length} templates`;
+  if (options.logMessage) clog(options.logMessage, options.logClass || 'c-ok');
 }
 
 function renderTemplates() {
@@ -580,6 +597,11 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 // ── code save ─────────────────────────────────────────────────────────────────
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== 'local' || !changes.templates) return;
+  syncTemplates(changes.templates.newValue || {});
+});
+
 $btnSave.addEventListener('click', async () => {
   await send({ type: 'saveScript', code: $editor.value });
   clog('Script saved.', 'c-ok');

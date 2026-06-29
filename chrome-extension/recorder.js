@@ -6,20 +6,66 @@
 
   let keyBuffer = '';
   let keyTimer  = null;
+  let sendChain = Promise.resolve();
+
+  function queueEvent(event) {
+    sendChain = sendChain
+      .catch(() => {})
+      .then(() => new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'recEvent', event }, () => {
+          void chrome.runtime.lastError;
+          resolve();
+        });
+      }));
+    return sendChain;
+  }
+
+  function getViewportOffset() {
+    let left = 0;
+    let top = 0;
+    try {
+      let win = window;
+      while (win !== win.top && win.frameElement) {
+        const r = win.frameElement.getBoundingClientRect();
+        left += r.left;
+        top += r.top;
+        win = win.parent;
+      }
+    } catch (_) {}
+    return { left, top };
+  }
 
   function flushKeys() {
     clearTimeout(keyTimer);
     if (keyBuffer) {
-      chrome.runtime.sendMessage({ type: 'recEvent', event: { kind: 'type', text: keyBuffer } });
+      queueEvent({ kind: 'type', text: keyBuffer });
       keyBuffer = '';
     }
   }
 
-  function onClick(e) {
+  function getTargetRect(target) {
+    if (!target || typeof target.getBoundingClientRect !== 'function') return null;
+    const r = target.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    const offset = getViewportOffset();
+    return {
+      left: r.left + offset.left,
+      top: r.top + offset.top,
+      width: r.width,
+      height: r.height,
+    };
+  }
+
+  function onPointerDown(e) {
+    if (e.button !== 0 && e.button !== 2) return;
+    const offset = getViewportOffset();
     flushKeys();
-    chrome.runtime.sendMessage({
-      type: 'recEvent',
-      event: { kind: 'click', x: e.clientX, y: e.clientY, button: e.button === 2 ? 'right' : 'left' }
+    queueEvent({
+      kind: 'click',
+      x: e.clientX + offset.left,
+      y: e.clientY + offset.top,
+      button: e.button === 2 ? 'right' : 'left',
+      targetRect: getTargetRect(e.target),
     });
   }
 
@@ -41,7 +87,7 @@
     const base = e.key.toLowerCase();
     if (['control','shift','alt','meta'].includes(base)) return; // bare modifier
     mods.push(base);
-    chrome.runtime.sendMessage({ type: 'recEvent', event: { kind: 'key', combo: mods.join('+') } });
+    queueEvent({ kind: 'key', combo: mods.join('+') });
   }
 
   function onScroll() {
@@ -49,11 +95,11 @@
     // Debounce scroll events
     clearTimeout(window.__sikulixScrollTimer);
     window.__sikulixScrollTimer = setTimeout(() => {
-      chrome.runtime.sendMessage({ type: 'recEvent', event: { kind: 'scroll', direction: 'down', amount: 300 } });
+      queueEvent({ kind: 'scroll', direction: 'down', amount: 300 });
     }, 400);
   }
 
-  document.addEventListener('click',   onClick,   true);
+  document.addEventListener('pointerdown', onPointerDown, true);
   document.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('scroll',    onScroll,  { passive: true });
 
@@ -61,7 +107,7 @@
   chrome.runtime.onMessage.addListener(function handler(msg) {
     if (msg.type === 'stopRecorder') {
       flushKeys();
-      document.removeEventListener('click',   onClick,   true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('scroll',    onScroll);
       chrome.runtime.onMessage.removeListener(handler);
