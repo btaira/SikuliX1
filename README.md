@@ -8,53 +8,125 @@
 
 # SikuliX1
 
-### *Historical SikuliX1 codebase — mirrored under oculix-org.*
+### Historical SikuliX1 codebase, preserved here with fork-specific experiments
 
 <br>
 
-![Status](https://img.shields.io/badge/status-archived%20mirror-555?style=for-the-badge)
-![Active fork](https://img.shields.io/badge/active%20fork-OculiX-1f883d?style=for-the-badge&logo=github)
+![Status](https://img.shields.io/badge/status-active%20fork-1f883d?style=for-the-badge)
+![Core](https://img.shields.io/badge/core-Java%2011%20%7C%202.1.0--SNAPSHOT-1f6feb?style=for-the-badge)
+![Extension](https://img.shields.io/badge/extension-Chrome%20MV3%20%7C%20v2.0.0-f59e0b?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey?style=for-the-badge)
 
 </div>
 
 ---
 
-## 🎯 Where you probably want to go
+## Where to go
 
-| You want to… | Go to |
+| If you want to... | Start here |
 |---|---|
-| **Use SikuliX today** | 👉 **[oculix-org/Oculix](https://github.com/oculix-org/Oculix)** — the active fork. Java 17+, current releases (`v3.0.3` stable, `v4.0` in flight). |
-| **Report a bug or request a feature** | 👉 **[oculix-org/Oculix/issues](https://github.com/oculix-org/Oculix/issues)** |
-| **Read the public documentation** | 👉 **[docs.oculix.org](https://docs.oculix.org)** |
-| **See RaiMan's original upstream** | 👉 [RaiMan/SikuliX1](https://github.com/RaiMan/SikuliX1) — archived March 2026 by its creator |
-| **Browse the legacy SikuliX1 code** | You're here. Read-only mirror. |
+| Use the actively maintained SikuliX successor | [oculix-org/Oculix](https://github.com/oculix-org/Oculix) |
+| Work on the legacy Java API or IDE | [`API/`](API) and [`IDE/`](IDE) |
+| Explore the browser automation prototype | [`chrome-extension/`](chrome-extension) |
+| See the preserved mirror this fork tracks | [oculix-org/SikuliX1](https://github.com/oculix-org/SikuliX1) |
+| See the original archived upstream | [RaiMan/SikuliX1](https://github.com/RaiMan/SikuliX1) |
 
 ---
 
-## What is SikuliX (briefly)
+## What this repository is now
 
-SikuliX uses **computer vision** ([OpenCV](https://opencv.org/)) to identify and interact with anything visible on a screen — Windows, macOS, Linux. It locates GUI elements through image recognition, then drives them with simulated mouse and keyboard input. No access to source code, DOM, or accessibility APIs required.
+This repository is no longer just a passive mirror. In its current state, it combines:
 
-The original motto, still valid : *"If you can see it, you can automate it."*
+- the historical SikuliX1 Maven multi-module Java codebase
+- the legacy `API` and `IDE` sources for the 2.x line
+- GitHub Actions workflows for compiling and packaging historical builds
+- an experimental `chrome-extension/` project for SikuliX-style browser automation inside Chrome
+- support assets and static pages preserved from the original project layout
 
-For the modern continuation with OpenCV 4.10 (via Apertix), Java 17+, working VNC stack, Android 12+ ADB, PaddleOCR option, and 22 native-reviewed locales → **[oculix-org/Oculix](https://github.com/oculix-org/Oculix)**.
+If you are looking for the mainline future of SikuliX, use **OculiX**. If you are working on preservation, compatibility, research, or fork-specific experiments, this repo is the right place.
 
 ---
 
-## 🙏 Heritage
+## Repo layout
 
-A 23-year lineage of MIT-licensed open work :
+- [`API/`](API): Java API for screen capture, image matching, OCR, and native input automation.
+- [`IDE/`](IDE): Swing-based scripting IDE and runner built on top of the API.
+- [`chrome-extension/`](chrome-extension): Manifest V3 Chrome extension with template capture, a workflow editor, a code editor, recording support, and side-panel execution tools.
+- [`pages/`](pages): legacy static site content for downloads and project pages.
+- [`Support/`](Support): packaging assets, templates, and archived helper material.
 
-- **2003 · MIT CSAIL** — Rob Miller's UI Design Group launches the visual automation research project that would become Sikuli.
-- **2009 · UIST paper** — [**@doubleshow**](https://github.com/doubleshow) (Tom Yeh) and [**@vgod**](https://github.com/vgod) (Tsung-Hsiang Chang) formally introduce Sikuli at the ACM Symposium on User Interface Software and Technology. The codebase eventually lands under the [sikuli](https://github.com/sikuli) GitHub organization.
-- **2010–2023 · SikuliX1** — [**@RaiMan**](https://github.com/RaiMan) (Raimund Hocke) takes over as sole maintainer, evolving the project through Java 8 → 11, multi-platform fixes, OCR integration, and 13 years of patient stewardship.
-- **March 2026 · oculix-org** — RaiMan archives the upstream and transmits stewardship; active development continues as **OculiX**.
+---
 
-Massive gratitude to all four — without them, this project simply doesn't exist. The MIT license they chose 23 years ago is still in place today, and that's not an accident.
+## Legacy Java build notes
+
+Root `pom.xml` is an aggregator for:
+
+- `com.sikulix:sikulixapi`
+- `com.sikulix:sikulixide`
+
+Common commands:
+
+```bash
+mvn -pl API compile
+mvn -pl API package
+mvn -pl IDE -P complete-win-jar package -DskipTests
+mvn -pl IDE -P complete-mac-jar package -DskipTests
+mvn -pl IDE -P complete-lux-jar package -DskipTests
+```
+
+Notes:
+
+- The legacy Java build is still centered on Java 11 in the Maven configuration and CI workflows.
+- There is no automated test suite in this repository today, so validation is mostly by compile/build and manual runtime checks.
+
+---
+
+## Chrome extension prototype
+
+The `chrome-extension/` folder is a fork-specific experiment that brings SikuliX-style visual automation into Chrome.
+
+Current capabilities in this repo include:
+
+- capturing image templates from the current tab
+- storing templates in extension storage
+- building and reordering visual workflow steps
+- exporting workflow steps into executable code
+- running actions such as click, right-click, double-click, wait, type, key, scroll, and pause
+- recording user interactions into workflow steps
+- previewing captured images and executing through a Chrome side panel
+
+To load it locally:
+
+1. Open `chrome://extensions/`
+2. Enable **Developer mode**
+3. Choose **Load unpacked**
+4. Select the [`chrome-extension/`](chrome-extension) folder
+
+This prototype uses elevated browser permissions such as `tabs`, `scripting`, `storage`, `sidePanel`, `debugger`, and host access to automate the active tab.
+
+---
+
+## What SikuliX is
+
+SikuliX is a visual automation tool built around computer vision. It finds GUI elements by image matching and then interacts with them using simulated mouse and keyboard input. The original idea still fits:
+
+> If you can see it, you can automate it.
+
+---
+
+## Heritage
+
+This code sits in a long MIT-licensed lineage:
+
+- MIT CSAIL research that introduced the original Sikuli concept
+- the Sikuli open source project and its academic publication era
+- Raimund Hocke's long stewardship of SikuliX1
+- continued preservation and forward development in newer forks such as OculiX
+
+Many people carried this project across multiple generations. This fork keeps that history accessible while making room for new experiments.
 
 ---
 
 <div align="center">
-<sub>MIT-licensed. The torch is carried forward at <a href="https://github.com/oculix-org/Oculix">oculix-org/Oculix</a>.</sub>
+<sub>MIT-licensed. For active core development, see <a href="https://github.com/oculix-org/Oculix">oculix-org/Oculix</a>.</sub>
 </div>
